@@ -1,0 +1,50 @@
+workflows:
+  android-capacitor:
+    name: Sakina Android APK
+    max_build_duration: 30
+    environment:
+      node: 18.17.0
+      java: 17
+
+    scripts:
+      - name: Install dependencies
+        script: npm install
+
+      - name: Add Android platform
+        script: npx cap add android || true
+
+      - name: Sync web assets + plugins
+        script: npx cap sync android
+
+      - name: Bundle azan audio + patch manifest permissions
+        script: |
+          chmod +x scripts/setup-android-azan.sh
+          ./scripts/setup-android-azan.sh
+
+      - name: Copy custom app icons
+        script: |
+          RES=android/app/src/main/res
+          cp -r android-res/mipmap-mdpi/*       $RES/mipmap-mdpi/
+          cp -r android-res/mipmap-hdpi/*       $RES/mipmap-hdpi/
+          cp -r android-res/mipmap-xhdpi/*      $RES/mipmap-xhdpi/
+          cp -r android-res/mipmap-xxhdpi/*     $RES/mipmap-xxhdpi/
+          cp -r android-res/mipmap-xxxhdpi/*    $RES/mipmap-xxxhdpi/
+          cp -r android-res/mipmap-anydpi-v26/* $RES/mipmap-anydpi-v26/
+          cp android-res/values/ic_launcher_background.xml $RES/values/ic_launcher_background.xml
+          echo "✅ Icons copied"
+
+      - name: Build debug APK
+        script: |
+          cd android
+          ./gradlew assembleDebug
+
+    artifacts:
+      - android/app/build/outputs/apk/debug/app-debug.apk
+
+    publishing:
+      email:
+        recipients:
+          - your@email.com
+        notify:
+          success: true
+          failure: true

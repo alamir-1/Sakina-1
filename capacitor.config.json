@@ -1,0 +1,29 @@
+{
+  "appId": "com.sakina.app",
+  "appName": "Sakina",
+  "webDir": "www",
+  "server": {
+    "hostname": "alamir-1.github.io",
+    "androidScheme": "https",
+    "allowNavigation": [
+      "*"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#0e4038"
+  },
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "LIGHT",
+      "backgroundColor": "#0e4038"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_launcher",
+      "iconColor": "#0e4038",
+      "sound": "default"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "sakina-app",
+  "version": "1.0.0",
+  "description": "Sakina - Islamic App",
+  "scripts": {
+    "android": "npx cap open android",
+    "sync": "npx cap sync android",
+    "build-apk": "cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/local-notifications": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.0.0"
+  }
+}
