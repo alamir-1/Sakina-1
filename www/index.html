@@ -174,10 +174,10 @@ img{max-width:100%;display:block;}
    fixed-height #app shell — never overlaid, so it can't be scrolled under or
    covered, and needs no extra bottom-padding hack on the content above it. */
 #bottomnav{
-  height:calc(var(--nav-h) + 14px + max(10px, env(safe-area-inset-bottom, 0px)));
-  min-height:calc(var(--nav-h) + 14px + max(10px, env(safe-area-inset-bottom, 0px)));
-  padding:12px 16px calc(14px + max(10px, env(safe-area-inset-bottom, 0px)));
-  padding-bottom:max(24px, calc(14px + env(safe-area-inset-bottom, 0px))) !important;
+  height:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px));
+  min-height:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px));
+  padding:12px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding-bottom:max(14px, calc(8px + env(safe-area-inset-bottom, 0px))) !important;
   display:flex;
   align-items:center;
   gap:12px;
@@ -5479,11 +5479,29 @@ async function authLogin({email,password,remember}){
     }
     if(!user){
       // Signed in successfully in Firebase but no local profile cache yet
-      // (e.g. first login on a new browser) — rebuild a minimal one.
+      // (e.g. first login on a new device/APK install, or after the local
+      // cache was cleared). Previously this always rebuilt a plain
+      // role:'user' profile here — which silently demoted real admins and
+      // the Super Admin back to a regular account on every fresh install,
+      // since their actual role only lived in the local cache. Fixed: look
+      // up the authoritative profile already stored in Firebase Realtime
+      // Database first, and only fall back to a fresh role:'user' profile
+      // if no such record exists there either (a genuinely brand-new user).
+      let remoteProfile = null;
+      try{ remoteProfile = await window.SAKINA_FIREBASE.db.get('users/'+fbUser.uid+'/profile'); }
+      catch(e){ console.error('failed to fetch remote profile on login', e); }
+      if(remoteProfile && remoteProfile.status==='suspended'){
+        await fb.signOutUser();
+        return {ok:false, errors:{form:'هذا الحساب موقوف حاليًا. تواصل مع الدعم.'}};
+      }
       user = {
-        id: fbUser.uid, name: fbUser.email.split('@')[0], username: fbUser.email.split('@')[0],
-        email: String(email).trim().toLowerCase(), role:'user', status:'active',
-        emailVerified:true, createdAt:new Date().toISOString(),
+        id: fbUser.uid,
+        name: (remoteProfile && remoteProfile.name) || fbUser.email.split('@')[0],
+        username: (remoteProfile && remoteProfile.username) || fbUser.email.split('@')[0],
+        email: String(email).trim().toLowerCase(),
+        role: (remoteProfile && remoteProfile.role) || 'user',
+        status: (remoteProfile && remoteProfile.status) || 'active',
+        emailVerified:true, createdAt:(remoteProfile && remoteProfile.createdAt) || new Date().toISOString(),
         lastLoginAt:new Date().toISOString(), loginCount:0,
         statsSnapshot: authEmptyStatsSnapshot(),
       };
@@ -11635,6 +11653,16 @@ const THEME_NEUTRALS = {
     dark:{'--bg':'#101010','--card':'#1b1b1b','--border':'#333333'},
   },
 };
+function syncStatusBarColor(){
+  // Keeps the native Android status bar (clock/wifi/battery row) in sync
+  // with whichever color palette (teal/gold/blue/mono) is currently
+  // active — previously it was hardcoded to teal's color and never
+  // updated when the user switched themes.
+  if(!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar)) return;
+  const p = THEME_PALETTES[appSettings.palette] || THEME_PALETTES.teal;
+  const color = p['--teal-800'] || '#0e4038';
+  try{ window.Capacitor.Plugins.StatusBar.setBackgroundColor({ color }); }catch(e){}
+}
 function applyPalette(){
   const p = THEME_PALETTES[appSettings.palette] || THEME_PALETTES.teal;
   Object.entries(p).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
@@ -11642,6 +11670,7 @@ function applyPalette(){
   const neutrals = THEME_NEUTRALS[appSettings.palette] || THEME_NEUTRALS.teal;
   const n = isDark ? neutrals.dark : neutrals.light;
   Object.entries(n).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+  syncStatusBarColor();
 }
 const NAV_LABELS = {
   ar:{home:'الرئيسية',projects:'قصص الأنبياء',knowledge:'الأحاديث',communities:'المجتمعات',more:'المزيد'},
