@@ -21,7 +21,7 @@
       "backgroundColor": "#0e4038"
     },
     "LocalNotifications": {
-      "smallIcon": "ic_launcher",
+      "smallIcon": "ic_stat_sakina",
       "iconColor": "#0e4038",
       "sound": "default"
     },
