@@ -2223,10 +2223,11 @@ html{scroll-behavior:smooth;}
         margin: 0;
         padding: 0;
       }
-      /* Bottom nav safe area */
-      #bottomnav {
-        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
-      }
+      /* NOTE: #bottomnav's own safe-area padding is defined once, in the
+         main stylesheet above — intentionally not duplicated here, since a
+         second `#bottomnav{padding-bottom:...!important}` rule later in the
+         cascade would win (same specificity, later source order) and quietly
+         override the real fix with a weaker one that has no minimum floor. */
     </style>
 
     <!-- ═══ Capacitor Status Bar (edge-to-edge) ═══ -->
@@ -2245,6 +2246,33 @@ html{scroll-behavior:smooth;}
           SB.setOverlaysWebView({ overlay: true });
           SB.setBackgroundColor({ color: '#0e4038' });
           SB.setStyle({ style: 'LIGHT' });
+        }
+      });
+      // Capacitor v6 App plugin — hardware/gesture back button.
+      // Without this, Android's default behavior is to exit the app on the
+      // very first back press (or rely on WebView.canGoBack(), which isn't
+      // consistent across OEM WebViews for pushState-based SPA navigation).
+      // This wires the back button explicitly to the app's own in-app
+      // navigation stack (history_ / goBack(), defined later in this file),
+      // and only exits the app when the user is already at a root/home tab.
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+          var CapApp = window.Capacitor.Plugins.App;
+          CapApp.addListener('backButton', function() {
+            try {
+              if (typeof history_ !== 'undefined' && history_.length > 1 && typeof goBack === 'function') {
+                goBack();
+              } else if (document.getElementById('authScreen') && !document.getElementById('authScreen').classList.contains('hidden')) {
+                // On the login/register screens with nothing to go back to,
+                // exit rather than getting stuck.
+                CapApp.exitApp();
+              } else {
+                CapApp.exitApp();
+              }
+            } catch (e) {
+              CapApp.exitApp();
+            }
+          });
         }
       });
     </script>
