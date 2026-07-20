@@ -5298,14 +5298,18 @@ function authEmptyStatsSnapshot(){
 // for real, in Firebase Auth + Realtime Database. Idempotent: if a
 // superadmin profile already exists locally, this does nothing.
 async function authEnsureDefaultSuperAdmin(){
-  const users = authLoadUsers();
-  if(users.some(u=>u.role==='superadmin')) return;
   const seed = SUPER_ADMIN_SEED;
-  const fb = await waitForFb();
-  let uid;
-  try{
-    // First run ever: actually creates the account in Firebase Auth.
-    const fbUser = await fb.signUp(seed.email, seed.password);
+const fb = await waitForFb();
+if(!fb){
+  // Firebase module hasn't finished loading yet (slow/offline first
+  // launch) — skip silently, boot() still shows the login screen, and
+  // this will just run again the next time the app is opened.
+  return;
+}
+let uid;
+try{
+  // First run ever: actually creates the account in Firebase Auth.
+  const fbUser = await fb.signUp(seed.email, seed.password);
     uid = fbUser.uid;
   }catch(e){
     if(e && e.code==='auth/email-already-in-use'){
@@ -15142,6 +15146,7 @@ async function sakinaTestNotification(kind){
   if(!window.Capacitor || !window.Capacitor.Plugins) return;
   const LN = window.Capacitor.Plugins.LocalNotifications;
   if(!LN) return;
+  try{
   LN.addListener('localNotificationActionPerformed', (action)=>{
     const extra = action && action.notification && action.notification.extra;
     if(!extra) return;
