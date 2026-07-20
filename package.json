@@ -8,8 +8,8 @@
     "build-apk": "cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^6.0.0",
     "@capacitor/android": "^6.0.0",
-    "@capacitor/app": "^6.0.0",
     "@capacitor/core": "^6.0.0",
     "@capacitor/local-notifications": "^6.0.0",
     "@capacitor/status-bar": "^6.0.0"

@@ -1514,6 +1514,23 @@ img{max-width:100%;display:block;}
 .auth-switch-line{text-align:center;font-size:12.5px;color:var(--text-soft);margin-top:18px;}
 .auth-switch-line button{background:none;border:none;color:var(--teal-600);font-weight:700;cursor:pointer;font-family:inherit;font-size:12.5px;padding:0;}
 [data-theme="dark"] .auth-switch-line button{color:var(--tan-400);}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--text-soft);font-size:11.5px;}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:var(--border);}
+.auth-google-btn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--r-md);
+  padding:12px 22px;font-size:13px;font-weight:700;font-family:'Cairo';cursor:pointer;
+  transition:transform .12s var(--ease-out), border-color .15s var(--ease-out), box-shadow .15s var(--ease-out);
+  position:relative;overflow:hidden;
+}
+.auth-google-btn:active{transform:scale(.96);}
+.auth-google-btn svg{width:19px;height:19px;flex-shrink:0;}
+@media(hover:hover){.auth-google-btn:hover{border-color:var(--teal-500);box-shadow:0 6px 14px -6px color-mix(in srgb, var(--teal-600) 25%, transparent);}}
+.auth-google-btn.is-loading{color:transparent !important;pointer-events:none;}
+.auth-google-btn.is-loading svg{opacity:0;}
+.auth-google-btn .auth-spinner{display:none;position:absolute;inset:0;align-items:center;justify-content:center;}
+.auth-google-btn.is-loading .auth-spinner{display:flex;}
+.auth-google-btn .auth-spinner i{border-color:color-mix(in srgb, var(--teal-600) 30%, transparent);border-top-color:var(--teal-600);}
 .auth-back-btn{
   position:absolute;top:16px;inset-inline-start:14px;z-index:2;width:32px;height:32px;border-radius:var(--r-sm);
   background:rgba(255,255,255,.14);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;
@@ -5501,6 +5518,83 @@ async function authLogin({email,password,remember}){
   }
 }
 
+// -- Google Sign-In --------------------------------------------------------
+// Google actively blocks its normal web OAuth flow (signInWithPopup /
+// signInWithRedirect) inside embedded WebViews — which is exactly what every
+// Capacitor app runs in — so this can't be done with the Firebase *web* SDK
+// alone. It defers to the @capacitor-firebase/authentication plugin, which
+// opens Android's native account picker and completes the sign-in inside
+// Firebase Auth itself. Everything after that reuses the exact same local
+// profile/session logic as authLogin() above, so a Google-signed-in user is
+// indistinguishable from an email/password one everywhere else in the app.
+//
+// ONE-TIME NATIVE SETUP REQUIRED (console/Gradle side — cannot be done from
+// this file, see README):
+//   1. Firebase Console → Authentication → Sign-in method → enable "Google"
+//   2. Firebase Console → Project settings → your Android app (com.sakina.app)
+//      → add the SHA-1 fingerprint of every keystore you sign the APK with
+//      (debug AND release each have a different SHA-1)
+//   3. Download google-services.json from that same page and place it at
+//      android/app/google-services.json — the Gradle files already auto-apply
+//      the Google Services plugin the moment that file exists, nothing else
+//      to change there
+//   4. npm install (pulls in @capacitor-firebase/authentication, already
+//      added to package.json), then npx cap sync android, then rebuild
+async function authGoogleSignIn(){
+  const FirebaseAuthentication = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication;
+  if(!FirebaseAuthentication){
+    showToast('تسجيل الدخول بجوجل يعمل فقط داخل تطبيق سكينة (APK) بعد إتمام إعداد Google في Firebase — راجع خطوات الإعداد');
+    return;
+  }
+  if(!authIsOnline()){ showToast('تحقّق من اتصالك بالإنترنت وحاول مرة أخرى'); return; }
+  const btn = document.getElementById('googleSignInBtn');
+  authSetLoading(btn, true);
+  try{
+    const result = await FirebaseAuthentication.signInWithGoogle();
+    const fbUser = result && result.user;
+    if(!fbUser || !fbUser.uid) throw new Error('no-user-returned');
+
+    const users = authLoadUsers();
+    let user = users.find(u=>u.id===fbUser.uid);
+    if(user && user.status==='suspended'){
+      try{ await FirebaseAuthentication.signOut(); }catch(e){}
+      authSetLoading(btn, false);
+      authShowFieldError('loginFormErr', 'هذا الحساب موقوف حاليًا. تواصل مع الدعم.');
+      return;
+    }
+    if(!user){
+      // First time this Google account signs in — build a local profile
+      // for it, same as authLogin() does for a "rebuilt" email account.
+      const email = String(fbUser.email||'').trim().toLowerCase();
+      const name = fbUser.displayName || (email? email.split('@')[0] : 'مستخدم سكينة');
+      user = {
+        id: fbUser.uid, name, username: email? email.split('@')[0] : ('user_'+fbUser.uid.slice(0,6)),
+        email, role:'user', status:'active', emailVerified:true,
+        createdAt:new Date().toISOString(), lastLoginAt:null, loginCount:0,
+        statsSnapshot: authEmptyStatsSnapshot(),
+      };
+      users.push(user);
+    }
+    user.lastLoginAt = new Date().toISOString();
+    user.loginCount = (user.loginCount||0) + 1;
+    authSaveUsers(users);
+    authCreateSession(user, true); // Google sign-in always persists, like "تذكرني"
+
+    showToast(`أهلًا بعودتك، ${String(user.name).split(' ')[0]} 🤍`);
+    await syncStartForUser(user.id);
+    userProfile = Object.assign({}, DEFAULT_PROFILE, JSON.parse(localStorage.getItem('sakina_profile')||'{}'),
+      {name:user.name, avatar: (userProfile&&userProfile.avatar) || fbUser.photoUrl || null});
+    saveProfile();
+    showApp();
+  }catch(e){
+    console.error('authGoogleSignIn failed:', e);
+    authSetLoading(btn, false);
+    // A cancelled account picker is a normal, silent case — not an error to surface.
+    if(e && (e.code==='auth/cancelled-popup-request' || e.code==='ERROR_ACTIVITY_DOES_NOT_EXIST' || /cancel/i.test(e.message||''))) return;
+    authShowFieldError('loginFormErr', authNetworkOrServerError(e));
+  }
+}
+
 // FIREBASE HOOK: replace body with signOut(auth)
 function authLogout(){
   authSyncCurrentUserSnapshot();
@@ -5852,6 +5946,7 @@ const AUTH_ICON = {
   warn:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
   info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg>',
   back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>',
+  google:'<svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.9-2.26 5.36-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>',
 };
 
 function authField(id, label, icon, type, placeholder, extra){
@@ -5889,6 +5984,11 @@ function renderAuthLogin(){
       ${authFormErrBlock('loginFormErr')}
       <button type="submit" class="btn-primary auth-submit" id="loginSubmitBtn">تسجيل الدخول</button>
     </form>
+    <div class="auth-divider">أو</div>
+    <button type="button" class="auth-google-btn" id="googleSignInBtn" onclick="authGoogleSignIn()">
+      ${AUTH_ICON.google}<span>المتابعة عبر جوجل</span>
+      <span class="auth-spinner"><i></i></span>
+    </button>
     <div class="auth-switch-line">ليس لديك حساب؟ <button type="button" onclick="showAuthScreen('register')">أنشئ حسابًا جديدًا</button></div>
   </div>`;
 }
@@ -15073,31 +15173,57 @@ async function boot(){
   // and warm the synchronous "which books are downloaded" set — fired
   // without awaiting so it never delays first paint or the auth check below.
   hadithInitStorage();
-  // Create the one-and-only default Super Admin account the first time
-  // the app is ever initialized (no-op on every later run).
-  await authEnsureDefaultSuperAdmin();
-  // If the app was opened from a Firebase password-reset email link
-  // (?mode=resetPassword&oobCode=...), show the reset screen first,
-  // regardless of whether a session already exists.
+
+  // OFFLINE-FIRST BOOT: the app must open INSTANTLY, with zero internet
+  // connection, every single time. Nothing below this point may be awaited
+  // before the first screen (login or app) is painted — both
+  // authEnsureDefaultSuperAdmin() and syncStartForUser() internally await
+  // Firebase's module script finishing its network load (waitForFb()), which
+  // can take several seconds — or, with no connection at all, the full
+  // timeout — on a slow/offline connection. Previously those awaits sat
+  // *before* showAuthScreen()/showApp(), so the user stared at a blank
+  // screen the whole time. Now we decide + paint the UI first, from purely
+  // local data (localStorage — no network involved), then kick off every
+  // Firebase-dependent task in the background afterward. Features that
+  // genuinely need the internet (login, live sync, creating the seed
+  // super-admin) simply activate once/if connectivity is available; they
+  // no longer hold the UI hostage.
   const oobCode = authGetResetOobCode();
-  if(oobCode){ showAuthScreen('reset', {oobCode}); return; }
-  const session = authGetSession();
-  if(session && authCurrentUser()){
-    await syncStartForUser(session.userId);
-    refreshReminderNotifications();
-    showApp();
-    // Schedule native Android notifications: azan channels first (so their sound
-    // is registered before anything tries to post to them), then prayer times +
-    // the fixed daily reminders (wird / hadith / quran).
-    sakinaRequestNotifPermission().then(async (granted)=>{
-      if(granted || window.Capacitor){
-        await ensureAzanChannels();
-        await scheduleNativePrayerNotifications();
-        await scheduleDailyReminderNotifications();
-      }
-    });
+  if(oobCode){
+    showAuthScreen('reset', {oobCode});
   } else {
-    showAuthScreen('login');
+    const session = authGetSession();
+    if(session && authCurrentUser()){
+      showApp(); // paints immediately from local/cached data
+    } else {
+      showAuthScreen('login'); // paints immediately
+    }
+  }
+
+  // Create the one-and-only default Super Admin account the first time the
+  // app is ever initialized (no-op on every later run). Backgrounded: never
+  // blocks the screen above.
+  authEnsureDefaultSuperAdmin().catch(e=>console.error('authEnsureDefaultSuperAdmin failed:', e));
+
+  if(!oobCode){
+    const session = authGetSession();
+    if(session && authCurrentUser()){
+      // Live two-way sync with Firebase — backgrounded. The app already
+      // shows the user's last-known local data; this just keeps it fresh
+      // once/if the network + Firebase module are ready.
+      syncStartForUser(session.userId).catch(e=>console.error('syncStartForUser failed:', e));
+      refreshReminderNotifications();
+      // Schedule native Android notifications: azan channels first (so their sound
+      // is registered before anything tries to post to them), then prayer times +
+      // the fixed daily reminders (wird / hadith / quran).
+      sakinaRequestNotifPermission().then(async (granted)=>{
+        if(granted || window.Capacitor){
+          await ensureAzanChannels();
+          await scheduleNativePrayerNotifications();
+          await scheduleDailyReminderNotifications();
+        }
+      });
+    }
   }
 }
 boot().catch(e=>{
