@@ -15147,19 +15147,22 @@ async function sakinaTestNotification(kind){
   const LN = window.Capacitor.Plugins.LocalNotifications;
   if(!LN) return;
   try{
-  LN.addListener('localNotificationActionPerformed', (action)=>{
-    const extra = action && action.notification && action.notification.extra;
-    if(!extra) return;
-    if(extra.type === 'azan' || extra.type === 'reminder'){
-      if(typeof navigateTo==='function') navigateTo('prayertimes');
-    } else if(extra.type === 'wird'){
-      if(typeof navigateTo==='function') navigateTo('adhkar');
-    } else if(extra.type === 'hadith'){
-      if(typeof navigateTo==='function') navigateTo('knowledge');
-    } else if(extra.type === 'quran'){
-      if(typeof navigateTo==='function') navigateTo('quran');
-    }
-  }).catch(()=>{});
+    LN.addListener('localNotificationActionPerformed', (action)=>{
+      const extra = action && action.notification && action.notification.extra;
+      if(!extra) return;
+      if(extra.type === 'azan' || extra.type === 'reminder'){
+        if(typeof navigateTo==='function') navigateTo('prayertimes');
+      } else if(extra.type === 'wird'){
+        if(typeof navigateTo==='function') navigateTo('adhkar');
+      } else if(extra.type === 'hadith'){
+        if(typeof navigateTo==='function') navigateTo('knowledge');
+      } else if(extra.type === 'quran'){
+        if(typeof navigateTo==='function') navigateTo('quran');
+      }
+    });
+  }catch(e){
+    console.warn('[Sakina] LN.addListener failed', e);
+  }
 })();
 
 /* Re-sync the native schedule whenever the app comes back to the foreground —
