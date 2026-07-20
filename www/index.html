@@ -174,10 +174,10 @@ img{max-width:100%;display:block;}
    fixed-height #app shell — never overlaid, so it can't be scrolled under or
    covered, and needs no extra bottom-padding hack on the content above it. */
 #bottomnav{
-  height:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px));
-  min-height:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px));
-  padding:12px 16px calc(8px + env(safe-area-inset-bottom, 0px));
-  padding-bottom:max(14px, calc(8px + env(safe-area-inset-bottom, 0px))) !important;
+  height:calc(var(--nav-h) + 14px + env(safe-area-inset-bottom, 0px));
+  min-height:calc(var(--nav-h) + 14px + env(safe-area-inset-bottom, 0px));
+  padding:12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-bottom:max(14px, env(safe-area-inset-bottom, 14px)) !important;
   display:flex;
   align-items:center;
   gap:12px;
@@ -582,6 +582,34 @@ img{max-width:100%;display:block;}
 }
 #app.quran-immersive #pullIndicator{display:none;}
 
+/* Floating fullscreen toggle: stays visible in both normal and fullscreen
+   reading mode (it lives outside the elements fullscreen mode hides),
+   parked where the AI fab normally sits since that's hidden here anyway. */
+.qr-fs-toggle{
+  position:fixed;
+  /* Safe-area aware: above gesture bar, away from edge */
+  bottom:calc(22px + env(safe-area-inset-bottom, 0px));
+  left:calc(18px + env(safe-area-inset-left, 0px));
+  width:44px;height:44px;border-radius:50%;
+  background:var(--card);
+  border:1.5px solid var(--tan-400);
+  color:var(--teal-700);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 12px rgba(0,0,0,.18);
+  z-index:46;cursor:pointer;touch-action:manipulation;
+  transition:background .18s, transform .12s, opacity .2s;
+}
+[data-theme="dark"] .qr-fs-toggle{
+  background:var(--card);
+  border-color:var(--tan-500);
+  color:var(--tan-300);
+}
+.qr-fs-toggle svg{width:19px;height:19px;}
+.qr-fs-toggle:active{transform:scale(.88);}
+@media (min-width:560px){ .qr-fs-toggle{position:absolute;bottom:18px;} }
+
+#app.quran-fullscreen .qr-topbar{display:none;}
+
 .qr-page-wrap{margin:10px 14px 0;position:relative;overscroll-behavior:none;}
 .qr-page-frame{
   position:relative;padding:18px;border-radius:22px;
@@ -822,15 +850,6 @@ img{max-width:100%;display:block;}
 .settings-list{padding:14px 16px 28px;}
 .set-row{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);padding:14px;border-radius:var(--r-md);margin-bottom:10px;box-shadow:var(--shadow);}
 .set-row .lbl{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:10px;}
-.set-row input[type="time"]{
-  font-family:'Tajawal',inherit;font-size:13.5px;font-weight:700;color:var(--text);
-  background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);
-  padding:8px 10px;outline:none;transition:border-color .15s;color-scheme:light;
-  min-width:96px;text-align:center;
-}
-.set-row input[type="time"]:focus{border-color:var(--teal-500);}
-.set-row input[type="time"]::-webkit-calendar-picker-indicator{filter:var(--time-icon-filter,none);opacity:.75;cursor:pointer;}
-[data-theme="dark"] .set-row input[type="time"]{color-scheme:dark;background:var(--bg);border-color:var(--border);}
 .switch{width:46px;height:26px;border-radius:var(--r-pill);background:var(--border);position:relative;cursor:pointer;flex-shrink:0;transition:background .2s var(--ease-out);}
 .switch::after{content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:3px;right:3px;transition:right .18s var(--ease-out);box-shadow:0 1px 3px rgba(0,0,0,.2);}
 .switch.on{background:linear-gradient(135deg,var(--teal-500),var(--teal-600));}
@@ -2223,11 +2242,10 @@ html{scroll-behavior:smooth;}
         margin: 0;
         padding: 0;
       }
-      /* NOTE: #bottomnav's own safe-area padding is defined once, in the
-         main stylesheet above — intentionally not duplicated here, since a
-         second `#bottomnav{padding-bottom:...!important}` rule later in the
-         cascade would win (same specificity, later source order) and quietly
-         override the real fix with a weaker one that has no minimum floor. */
+      /* Bottom nav safe area */
+      #bottomnav {
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+      }
     </style>
 
     <!-- ═══ Capacitor Status Bar (edge-to-edge) ═══ -->
@@ -2248,40 +2266,13 @@ html{scroll-behavior:smooth;}
           SB.setStyle({ style: 'LIGHT' });
         }
       });
-      // Capacitor v6 App plugin — hardware/gesture back button.
-      // Without this, Android's default behavior is to exit the app on the
-      // very first back press (or rely on WebView.canGoBack(), which isn't
-      // consistent across OEM WebViews for pushState-based SPA navigation).
-      // This wires the back button explicitly to the app's own in-app
-      // navigation stack (history_ / goBack(), defined later in this file),
-      // and only exits the app when the user is already at a root/home tab.
-      document.addEventListener('DOMContentLoaded', function() {
-        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-          var CapApp = window.Capacitor.Plugins.App;
-          CapApp.addListener('backButton', function() {
-            try {
-              if (typeof history_ !== 'undefined' && history_.length > 1 && typeof goBack === 'function') {
-                goBack();
-              } else if (document.getElementById('authScreen') && !document.getElementById('authScreen').classList.contains('hidden')) {
-                // On the login/register screens with nothing to go back to,
-                // exit rather than getting stuck.
-                CapApp.exitApp();
-              } else {
-                CapApp.exitApp();
-              }
-            } catch (e) {
-              CapApp.exitApp();
-            }
-          });
-        }
-      });
     </script>
 </head>
 <body>
-<div id="authScreen" class="hidden">
+<div id="authScreen">
   <div class="auth-scroll" id="authContent"></div>
 </div>
-<div id="app">
+<div id="app" class="hidden">
 
 
   <!-- HEADER -->
@@ -5479,29 +5470,11 @@ async function authLogin({email,password,remember}){
     }
     if(!user){
       // Signed in successfully in Firebase but no local profile cache yet
-      // (e.g. first login on a new device/APK install, or after the local
-      // cache was cleared). Previously this always rebuilt a plain
-      // role:'user' profile here — which silently demoted real admins and
-      // the Super Admin back to a regular account on every fresh install,
-      // since their actual role only lived in the local cache. Fixed: look
-      // up the authoritative profile already stored in Firebase Realtime
-      // Database first, and only fall back to a fresh role:'user' profile
-      // if no such record exists there either (a genuinely brand-new user).
-      let remoteProfile = null;
-      try{ remoteProfile = await window.SAKINA_FIREBASE.db.get('users/'+fbUser.uid+'/profile'); }
-      catch(e){ console.error('failed to fetch remote profile on login', e); }
-      if(remoteProfile && remoteProfile.status==='suspended'){
-        await fb.signOutUser();
-        return {ok:false, errors:{form:'هذا الحساب موقوف حاليًا. تواصل مع الدعم.'}};
-      }
+      // (e.g. first login on a new browser) — rebuild a minimal one.
       user = {
-        id: fbUser.uid,
-        name: (remoteProfile && remoteProfile.name) || fbUser.email.split('@')[0],
-        username: (remoteProfile && remoteProfile.username) || fbUser.email.split('@')[0],
-        email: String(email).trim().toLowerCase(),
-        role: (remoteProfile && remoteProfile.role) || 'user',
-        status: (remoteProfile && remoteProfile.status) || 'active',
-        emailVerified:true, createdAt:(remoteProfile && remoteProfile.createdAt) || new Date().toISOString(),
+        id: fbUser.uid, name: fbUser.email.split('@')[0], username: fbUser.email.split('@')[0],
+        email: String(email).trim().toLowerCase(), role:'user', status:'active',
+        emailVerified:true, createdAt:new Date().toISOString(),
         lastLoginAt:new Date().toISOString(), loginCount:0,
         statsSnapshot: authEmptyStatsSnapshot(),
       };
@@ -6226,6 +6199,7 @@ function resetToTab(page){
   history_ = [{page}];
   render();
   updateBottomNav(page);
+  $main.scrollTop = 0;
 }
 
 /* ---- AI FAB — draggable floating button (drag anywhere on screen, position persists) ---- */
@@ -6365,6 +6339,7 @@ function render(){
       const frame = document.getElementById('qrPageFrame');
       if(frame){ frame.classList.add('qr-resume-highlight'); setTimeout(()=>frame.classList.remove('qr-resume-highlight'), 2200); }
     }
+    quranSyncFullscreenBtn();
     quranSetupSwipeNav(qrCurrentPage);
   }
   if(cur.page==='hadithBook' || cur.page==='hadithChapter' || cur.page==='hadithDetail'){
@@ -6379,6 +6354,7 @@ function render(){
   const $appEl = document.getElementById('app');
   if($appEl){
     $appEl.classList.toggle('quran-immersive', cur.page==='quranReader');
+    if(cur.page!=='quranReader') $appEl.classList.remove('quran-fullscreen');
   }
   const $aiFab = document.getElementById('aiFab');
   if($aiFab) $aiFab.style.display = (cur.page==='assistant' || cur.page==='quranReader') ? 'none' : 'flex';
@@ -7127,7 +7103,9 @@ function renderQuranReader(data){
       </div>
     </div>
   </div>
-`;
+  <button class="qr-fs-toggle" id="qrFsBtn" onclick="toggleQuranFullscreen()" title="ملء الشاشة" aria-label="ملء الشاشة">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3m11-5v3a2 2 0 01-2 2h-3"/></svg>
+  </button>`;
 }
 /* Swipe left/right to move between Mushaf pages (right-to-left reading
    order: a swipe toward the right = next page, toward the left = previous
@@ -7166,6 +7144,27 @@ function quranExitConfirmed(){
   closeSheet();
   quranReadingLeave();
   resetToTab('quran');
+}
+function toggleQuranFullscreen(){
+  const appEl = document.getElementById('app');
+  if(!appEl) return;
+  appEl.classList.toggle('quran-fullscreen');
+  quranSyncFullscreenBtn();
+  // Force repaint — fixes Android WebView hit-test bug on first tap
+  const btn = document.getElementById('qrFsBtn');
+  if(btn){ btn.style.display='none'; void btn.offsetHeight; btn.style.display=''; }
+}
+function quranSyncFullscreenBtn(){
+  const appEl = document.getElementById('app');
+  const btn = document.getElementById('qrFsBtn');
+  if(!appEl || !btn) return;
+  const on = appEl.classList.contains('quran-fullscreen');
+  btn.innerHTML = on
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3M3 16h3a2 2 0 012 2v3m8-5h3a2 2 0 012 2v3"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3m11-5v3a2 2 0 01-2 2h-3"/></svg>';
+  const label = on ? 'الخروج من ملء الشاشة' : 'ملء الشاشة';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
 /* Which real Mushaf pages a Surah's ayahs fall on (inclusive range), and
    whether every one of those pages is already cached for offline reading. */
@@ -8123,27 +8122,37 @@ let khatmaGroupWizard = {step:1, type:null, name:''};
 function khatmaGroupWizardReset(){ khatmaGroupWizard = {step:1, type:null, name:''}; }
 function khatmaGroupWizardChooseType(type){ khatmaGroupWizard.type=type; khatmaGroupWizard.name = KHATMA_GROUP_TYPES[type]||''; khatmaGroupWizard.step=2; render(); }
 function khatmaGroupWizardSetName(v){ khatmaGroupWizard.name = v; }
-function khatmaGroupWizardCreate(){
-  const uid = khatmaMyUid(); if(!uid){ showToast('يجب تسجيل الدخول'); return; }
-  if(!isFirebaseConfigured()){ showToast('يتطلب اتصالًا بالإنترنت لإنشاء مجموعة مشتركة'); return; }
-  const name = (khatmaGroupWizard.name||'').trim() || 'ختمتي الجماعية';
-  const id = 'kg_'+Date.now();
-  const createdAt = Date.now();
-  const k = getActiveKhatma();
-  const me = authCurrentUser() || {};
-  const myMember = {id:uid, name:userProfile.name||me.name||'', photoURL:userProfile.avatar||me.photoURL||null,
-    privacy:'summary', pagesCompleted:k?k.pagesCompleted:0, dailyLog:k?k.dailyLog:{}, joinedAt:createdAt};
-  const group = {id, name, type:khatmaGroupWizard.type||'custom', ownerUid:uid, createdAt, dailyGoalPages:4,
-    members:{[uid]:myMember}, inviteCode:null};
-  window.SAKINA_FIREBASE.db.set('khatmaGroups/'+id, group)
-    .then(()=>window.SAKINA_FIREBASE.db.set('khatmaGroupIds/'+uid+'/'+id, true))
-    .then(()=>{
-      khatmaSubscribeToGroup(id);
-      khatmaGroupWizardReset();
-      showToast('تم إنشاء المجموعة بنجاح ✓');
-      navigateTo('khatmaGroupDetail', {id});
-    })
-    .catch(e=>{ console.error('khatma group create failed', e); showToast('تعذّر إنشاء المجموعة، تحقّق من الاتصال بالإنترنت'); });
+async function khatmaGroupWizardCreate(){
+  try{
+    const uid = khatmaMyUid(); if(!uid){ showToast('يجب تسجيل الدخول أولًا'); return; }
+    // Give Firebase a brief chance to finish initializing instead of failing
+    // instantly if the module script is still loading (e.g. slow connection).
+    if(!isFirebaseConfigured()){
+      showToast('جارٍ الاتصال بالخادم...');
+      try{ await waitForFb(); }catch(e){}
+    }
+    if(!isFirebaseConfigured()){ showToast('يتطلب اتصالًا بالإنترنت لإنشاء مجموعة مشتركة'); return; }
+    if(!authIsOnline()){ showToast('تحقّق من اتصالك بالإنترنت وحاول مرة أخرى'); return; }
+    const name = (khatmaGroupWizard.name||'').trim() || 'ختمتي الجماعية';
+    const id = 'kg_'+Date.now();
+    const createdAt = Date.now();
+    const k = getActiveKhatma();
+    const me = authCurrentUser() || {};
+    const myMember = {id:uid, name:userProfile.name||me.name||'', photoURL:userProfile.avatar||me.photoURL||null,
+      privacy:'summary', pagesCompleted:k?k.pagesCompleted:0, dailyLog:k?k.dailyLog:{}, joinedAt:createdAt};
+    const group = {id, name, type:khatmaGroupWizard.type||'custom', ownerUid:uid, createdAt, dailyGoalPages:4,
+      members:{[uid]:myMember}, inviteCode:null};
+    showToast('جارٍ إنشاء المجموعة...');
+    await window.SAKINA_FIREBASE.db.set('khatmaGroups/'+id, group);
+    await window.SAKINA_FIREBASE.db.set('khatmaGroupIds/'+uid+'/'+id, true);
+    khatmaSubscribeToGroup(id);
+    khatmaGroupWizardReset();
+    showToast('تم إنشاء المجموعة بنجاح ✓');
+    navigateTo('khatmaGroupDetail', {id});
+  }catch(e){
+    console.error('khatma group create failed', e);
+    showToast('تعذّر إنشاء المجموعة، تحقّق من الاتصال بالإنترنت');
+  }
 }
 
 /* ---- invitations: real accounts only (username/email lookup, or join-by-code/QR) ---- */
@@ -11653,16 +11662,6 @@ const THEME_NEUTRALS = {
     dark:{'--bg':'#101010','--card':'#1b1b1b','--border':'#333333'},
   },
 };
-function syncStatusBarColor(){
-  // Keeps the native Android status bar (clock/wifi/battery row) in sync
-  // with whichever color palette (teal/gold/blue/mono) is currently
-  // active — previously it was hardcoded to teal's color and never
-  // updated when the user switched themes.
-  if(!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar)) return;
-  const p = THEME_PALETTES[appSettings.palette] || THEME_PALETTES.teal;
-  const color = p['--teal-800'] || '#0e4038';
-  try{ window.Capacitor.Plugins.StatusBar.setBackgroundColor({ color }); }catch(e){}
-}
 function applyPalette(){
   const p = THEME_PALETTES[appSettings.palette] || THEME_PALETTES.teal;
   Object.entries(p).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
@@ -11670,7 +11669,6 @@ function applyPalette(){
   const neutrals = THEME_NEUTRALS[appSettings.palette] || THEME_NEUTRALS.teal;
   const n = isDark ? neutrals.dark : neutrals.light;
   Object.entries(n).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
-  syncStatusBarColor();
 }
 const NAV_LABELS = {
   ar:{home:'الرئيسية',projects:'قصص الأنبياء',knowledge:'الأحاديث',communities:'المجتمعات',more:'المزيد'},
@@ -14047,7 +14045,7 @@ function aiStartListening(){
       aiBeginRecognition(SR);
     }).catch(err=>{
       const name = err && err.name;
-      if(name==='NotAllowedError' || name==='SecurityError') showToast('محتاجين إذن استخدام الميكروفون. المتصفح رفض عرض طلب الإذن على الرابط ده (content://) — لازم الصفحة تتفتح عبر https عشان تظهر رسالة الإذن');
+      if(name==='NotAllowedError' || name==='SecurityError') showToast('تم رفض إذن الميكروفون. افتح إعدادات الجهاز > التطبيقات > سكينة > الأذونات وفعّل الميكروفون');
       else if(name==='NotFoundError') showToast('مفيش ميكروفون متاح على الجهاز');
       else showToast('تعذّر الوصول للميكروفون');
     });
