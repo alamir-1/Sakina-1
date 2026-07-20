@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "655112235102",
+    "firebase_url": "https://sakina-76962-default-rtdb.firebaseio.com",
+    "project_id": "sakina-76962",
+    "storage_bucket": "sakina-76962.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:655112235102:android:c2d85e996a02a3efc4accf",
+        "android_client_info": {
+          "package_name": "com.sakina.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "655112235102-2a2hphitoj78lrf6skeb40ehcv9fsvj2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sakina.app",
+            "certificate_hash": "9b4ac7b191ef93696cd880ee1e9c8a9f208ae1f4"
+          }
+        },
+        {
+          "client_id": "655112235102-74730noq8eugosiqm3vks3japrorq2i1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_Z9UPsSlmZksE5vOCZAnKUJhmgmRRZkw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "655112235102-74730noq8eugosiqm3vks3japrorq2i1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
