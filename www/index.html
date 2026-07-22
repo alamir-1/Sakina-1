@@ -6396,9 +6396,31 @@ function handleHardwareBack(){
   if(history_.length>1){ _goBackInternal(); return; }
   if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) window.Capacitor.Plugins.App.exitApp();
 }
-if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
-  window.Capacitor.Plugins.App.addListener('backButton', handleHardwareBack);
+// v21: the registration below used to be a single synchronous check —
+// `if(window.Capacitor...) addListener(...)`. If the native Capacitor
+// bridge hadn't finished initializing at that exact point in page load
+// (a timing race that varies device to device), the check silently
+// failed and the listener was NEVER attached. With no listener attached,
+// every hardware back press fell through to Capacitor's native default
+// behavior, which is to close/exit the app immediately — instead of
+// stepping back one page like the in-app back arrow. This retries until
+// the bridge is actually ready, and also re-attempts on 'deviceready' as
+// a belt-and-braces fallback, so we can never miss the registration.
+let _hardwareBackRegistered = false;
+function _registerHardwareBackOnce(){
+  if(_hardwareBackRegistered) return;
+  if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
+    window.Capacitor.Plugins.App.addListener('backButton', handleHardwareBack);
+    _hardwareBackRegistered = true;
+  }
 }
+(function registerHardwareBack(){
+  _registerHardwareBackOnce();
+  if(!_hardwareBackRegistered) setTimeout(registerHardwareBack, 100);
+})();
+document.addEventListener('deviceready', function(){
+  try{ _registerHardwareBackOnce(); }catch(e){ console.error('Failed to register hardware back handler:', e); }
+});
 
 /* ---- AI FAB — draggable floating button (drag anywhere on screen, position persists) ---- */
 let aiFabDragState = null;
