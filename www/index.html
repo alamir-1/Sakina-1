@@ -178,9 +178,7 @@ img{max-width:100%;display:block;}
   height:calc(var(--nav-h) + 14px + env(safe-area-inset-bottom, 0px));
   min-height:calc(var(--nav-h) + 14px + env(safe-area-inset-bottom, 0px));
   padding:12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
-  padding-bottom:max(14px, env(safe-area-inset-bottom, 14px)) !important;
-  padding-bottom:max(14px, env(safe-area-inset-bottom, 0px)) !important;
-margin-bottom:calc(6px + env(safe-area-inset-bottom, 0px) * 0);
+  margin-bottom:0;
   display:flex;
   align-items:center;
   gap:12px;
@@ -2282,10 +2280,6 @@ html{scroll-behavior:smooth;}
       html, body {
         margin: 0;
         padding: 0;
-      }
-      /* Bottom nav safe area */
-      #bottomnav {
-        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
       }
     </style>
 
@@ -6382,6 +6376,9 @@ function resetToTab(page){
 // arrow, every time, everywhere: close an open sheet/lightbox first,
 // otherwise step back one page in our own stack, and only exit when
 // there's genuinely nowhere left to go.
+// Home screen "press back again to exit" window (ms).
+const HOME_EXIT_CONFIRM_WINDOW = 2000;
+let _homeExitArmedAt = 0;
 function handleHardwareBack(){
   const lightbox = document.getElementById('lightbox');
   if(lightbox && lightbox.classList.contains('open')){ lightbox.classList.remove('open'); return; }
@@ -6393,8 +6390,27 @@ function handleHardwareBack(){
     if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) window.Capacitor.Plugins.App.exitApp();
     return;
   }
+  // Deeper than a tab root (e.g. surah reader, hadith detail, settings sub-page):
+  // step back exactly one screen, same as the in-app back arrow.
   if(history_.length>1){ _goBackInternal(); return; }
-  if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) window.Capacitor.Plugins.App.exitApp();
+  const cur = history_[history_.length-1];
+  const onHome = cur && cur.page==='home';
+  if(!onHome){
+    // On any other tab root (Quran, Hadith, Community/More, Tasbeeh, etc.)
+    // with nothing left in the stack: return to Home instead of exiting.
+    resetToTab('home');
+    return;
+  }
+  // Already on Home: require a second back-press within the confirm window
+  // before actually exiting the app.
+  const now = Date.now();
+  if(now - _homeExitArmedAt < HOME_EXIT_CONFIRM_WINDOW){
+    _homeExitArmedAt = 0;
+    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) window.Capacitor.Plugins.App.exitApp();
+    return;
+  }
+  _homeExitArmedAt = now;
+  showToast('اضغط رجوع مرة أخرى للخروج');
 }
 // v21: the registration below used to be a single synchronous check —
 // `if(window.Capacitor...) addListener(...)`. If the native Capacitor
@@ -6492,7 +6508,7 @@ function handleAiFabClick(e){
   navigateTo('assistant');
 }
 // override navigateTo for bottom-tab pages to reset stack (so back button behaves predictably)
-const TAB_PAGES = ['home','projects','knowledge','communities','more'];
+const TAB_PAGES = ['home','projects','knowledge','quran','more'];
 const _origNav = navigateTo;
 navigateTo = function(page,data){
   if(TAB_PAGES.includes(page) && !data){ resetToTab(page); return; }
