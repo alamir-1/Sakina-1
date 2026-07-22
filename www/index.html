@@ -11883,7 +11883,20 @@ function applyPalette(){
   // Keep the OS/browser status bar color (theme-color) in sync with the
   // header's own background, which uses --teal-800 of the active palette.
   const meta = document.getElementById('metaThemeColor');
-  if(meta) meta.setAttribute('content', p['--teal-800'] || '#08201b');
+  const statusBarColor = p['--teal-800'] || '#08201b';
+  if(meta) meta.setAttribute('content', statusBarColor);
+  // Also push the color to the native Capacitor status bar, which is a
+  // separate OS-level surface that the meta theme-color tag does NOT
+  // control. Without this, the real status bar (clock/wifi/battery area)
+  // stays stuck on whatever color it was set to at boot.
+  try{
+    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar){
+      window.Capacitor.Plugins.StatusBar.setBackgroundColor({ color: statusBarColor });
+    }
+    if(window.StatusBar && window.StatusBar.backgroundColorByHexString){
+      window.StatusBar.backgroundColorByHexString(statusBarColor);
+    }
+  }catch(e){ /* StatusBar plugin not available in this environment (e.g. web preview) */ }
 }
 const NAV_LABELS = {
   ar:{home:'الرئيسية',projects:'قصص الأنبياء',knowledge:'الأحاديث',communities:'المجتمعات',more:'المزيد'},
