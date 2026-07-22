@@ -860,6 +860,26 @@ margin-bottom:calc(6px + env(safe-area-inset-bottom, 0px) * 0);
 .switch.sm::after{width:14px;height:14px;top:3px;right:3px;}
 .switch.sm.on::after{right:19px;}
 
+.set-time-row{background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow);}
+.set-time-row .set-time-top{display:flex;align-items:center;justify-content:space-between;}
+.set-time-row .lbl{font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;color:var(--text-soft);}
+.set-time-row .lbl svg{width:16px;height:16px;color:var(--teal-600);flex-shrink:0;}
+[data-theme="dark"] .set-time-row .lbl svg{color:var(--tan-400);}
+.set-time-input{
+  display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--r-pill);padding:6px 14px;transition:border-color .15s var(--ease-out);
+}
+.set-time-input:focus-within{border-color:var(--teal-500);}
+.set-time-input input[type="time"]{
+  border:none;background:transparent;outline:none;font-family:'Cairo',sans-serif;font-weight:700;
+  font-size:14.5px;color:var(--ink);color-scheme:light;padding:2px 0;width:88px;text-align:center;
+}
+[data-theme="dark"] .set-time-input input[type="time"]{color-scheme:dark;}
+.set-time-input input[type="time"]::-webkit-calendar-picker-indicator{
+  filter:invert(.45);opacity:.75;cursor:pointer;margin-inline-start:2px;
+}
+[data-theme="dark"] .set-time-input input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(.75);}
+
 /* ---------- TASBEEH ---------- */
 .tsb-wrap{padding:14px 16px 30px;}
 .tsb-dhikr-chip.add{border-style:dashed;}
@@ -10709,9 +10729,15 @@ function toggleAdminAppSetting(key){
    The in-app streaming preview (previewMuezzin, below) still uses cdn.aladhan.com — that
    part only needs to work while the user is tapping "استماع" inside the app. */
 const MUEZZINS = [
-  {id:'alafasy',  name:'الشيخ مشاري بن راشد العفاسي', desc:'من أكثر الأصوات انتشارًا في تطبيقات الأذان', url:'https://cdn.aladhan.com/audio/adhans/a9.mp3',  channelId:'sakina_azan_1', rawSound:'azan1.mp3'},
-  {id:'zahrani',  name:'الشيخ منصور الزهراني',        desc:'أذان بصوت خليجي',                             url:'https://cdn.aladhan.com/audio/adhans/a11-mansour-al-zahrani.mp3', channelId:'sakina_azan_2', rawSound:'azan2.mp3'},
+  {id:'alafasy',  name:'الشيخ مشاري بن راشد العفاسي', desc:'من أكثر الأصوات انتشارًا في تطبيقات الأذان', url:'https://cdn.aladhan.com/audio/adhans/a9.mp3',  channelId:'sakina_azan_1_v2', rawSound:'azan1.mp3'},
+  {id:'zahrani',  name:'الشيخ منصور الزهراني',        desc:'أذان بصوت خليجي',                             url:'https://cdn.aladhan.com/audio/adhans/a11-mansour-al-zahrani.mp3', channelId:'sakina_azan_2_v2', rawSound:'azan2.mp3'},
 ];
+// Legacy channel IDs from before the _v2 bump — Android locks a channel's sound the
+// first time it's created with a given ID, and silently ignores any later createChannel()
+// call with the same ID even if `sound` is different. Any device that already has one of
+// these old channels (e.g. created before azan1.mp3/azan2.mp3 were bundled correctly) is
+// stuck with no/wrong sound forever unless we delete it and let a fresh _v2 ID be created.
+const LEGACY_AZAN_CHANNEL_IDS = ['sakina_azan_1','sakina_azan_2'];
 function toggleAdminAzan(){
   if(!authIsSuperAdmin()) return;
   adminAppSettings.azanEnabled = !adminAppSettings.azanEnabled;
@@ -11205,6 +11231,8 @@ const PICONS = {
   font:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20l5-14 5 14M6 15h6"/><path d="M15 20l3-9 3 9M16.5 17h3"/></svg>',
   palette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21a9 9 0 110-18 7 7 0 017 7c0 1.5-1 2.5-2.5 2.5H15a1.5 1.5 0 00-1 2.6c.4.4.6.9.6 1.4 0 1.4-1.2 2.5-2.6 2.5z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg>',
   bellRing:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>',
+  sunset:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V9M8.5 12.5L12 9l3.5 3.5M2 18h20M6 18a6 6 0 0112 0"/></svg>',
+  moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.5 14.3A8.5 8.5 0 019.7 3.5a8.5 8.5 0 1010.8 10.8z"/></svg>',
   shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg>',
   block:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M5.5 5.5l13 13"/></svg>',
   database:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
@@ -12086,22 +12114,22 @@ function renderSettings(){
     <div class="set-row"><div class="lbl">${PICONS.target} تذكير الورد اليومي</div><div class="switch ${appSettings.notifWird?'on':''}" onclick="toggleSetting('notifWird')"></div></div>
 
     <div class="set-section-title" style="margin-top:18px;">${ICONS.adhkar} إشعارات الأذكار</div>
-    <div class="set-row"><div class="lbl">🌅 أذكار الصباح (تلقائي بعد الفجر)</div><div class="switch ${appSettings.notifAdhkarMorning?'on':''}" onclick="toggleSetting('notifAdhkarMorning')"></div></div>
+    <div class="set-row"><div class="lbl">${PICONS.sunset} أذكار الصباح (تلقائي بعد الفجر)</div><div class="switch ${appSettings.notifAdhkarMorning?'on':''}" onclick="toggleSetting('notifAdhkarMorning')"></div></div>
     ${appSettings.notifAdhkarMorning? `<div class="set-row"><button type="button" class="btn-secondary" style="margin:0;padding:6px 12px;font-size:12px;" onclick="sakinaTestNotification('adhkar_morning')">تجربة الآن</button></div>` : ''}
-    <div class="set-row"><div class="lbl">🌙 أذكار المساء (تلقائي بعد العشاء)</div><div class="switch ${appSettings.notifAdhkarEvening?'on':''}" onclick="toggleSetting('notifAdhkarEvening')"></div></div>
+    <div class="set-row"><div class="lbl">${PICONS.moon} أذكار المساء (تلقائي بعد العشاء)</div><div class="switch ${appSettings.notifAdhkarEvening?'on':''}" onclick="toggleSetting('notifAdhkarEvening')"></div></div>
     ${appSettings.notifAdhkarEvening? `<div class="set-row"><button type="button" class="btn-secondary" style="margin:0;padding:6px 12px;font-size:12px;" onclick="sakinaTestNotification('adhkar_evening')">تجربة الآن</button></div>` : ''}
-    <div class="set-row"><div class="lbl">🌛 أذكار النوم (تلقائي كل ليلة)</div><div class="switch ${appSettings.notifAdhkarSleep?'on':''}" onclick="toggleSetting('notifAdhkarSleep')"></div></div>
+    <div class="set-row"><div class="lbl">${PICONS.moon} أذكار النوم (تلقائي كل ليلة)</div><div class="switch ${appSettings.notifAdhkarSleep?'on':''}" onclick="toggleSetting('notifAdhkarSleep')"></div></div>
     ${appSettings.notifAdhkarSleep? `<div class="set-row"><button type="button" class="btn-secondary" style="margin:0;padding:6px 12px;font-size:12px;" onclick="sakinaTestNotification('adhkar_sleep')">تجربة الآن</button></div>` : ''}
     <div class="set-row" style="opacity:.7;font-size:12px;">لا حاجة لتحديد وقت — تُرسل تلقائيًا حسب مواقيت الصلاة.</div>
 
     <div class="set-section-title" style="margin-top:18px;">${ICONS.community} أخرى</div>
     <div class="set-row"><div class="lbl">${ICONS.community} إشعارات المجتمعات</div><div class="switch ${appSettings.notifCommunity?'on':''}" onclick="toggleSetting('notifCommunity')"></div></div>
     <div class="set-row"><div class="lbl">${ICONS.heart} إشعارات الصدقة</div><div class="switch ${appSettings.notifCharity?'on':''}" onclick="toggleSetting('notifCharity')"></div></div>
-    <div class="set-row"><div class="lbl">📖 تذكير الحديث اليومي</div><div class="switch ${appSettings.notifHadith?'on':''}" onclick="toggleSetting('notifHadith'); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div></div>
-    ${appSettings.notifHadith? `<div class="set-row"><div class="lbl">⏰ وقت تذكير الحديث</div><input type="time" value="${appSettings.hadithReminderTime}" onchange="appSettings.hadithReminderTime=this.value; saveSettings(); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div>` : ''}
+    <div class="set-row"><div class="lbl">${ICONS.hadithBook} تذكير الحديث اليومي</div><div class="switch ${appSettings.notifHadith?'on':''}" onclick="toggleSetting('notifHadith'); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div></div>
+    ${appSettings.notifHadith? `<div class="set-time-row"><div class="set-time-top"><div class="lbl">${ICONS.clock} وقت تذكير الحديث</div><div class="set-time-input"><input type="time" value="${appSettings.hadithReminderTime}" onchange="appSettings.hadithReminderTime=this.value; saveSettings(); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div></div></div>` : ''}
     ${appSettings.notifHadith? `<div class="set-row"><button type="button" class="btn-secondary" style="margin:0;padding:6px 12px;font-size:12px;" onclick="sakinaTestNotification('hadith')">تجربة الآن</button></div>` : ''}
-    <div class="set-row"><div class="lbl">📗 تذكير قراءة القرآن</div><div class="switch ${appSettings.notifQuran?'on':''}" onclick="toggleSetting('notifQuran'); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div></div>
-    ${appSettings.notifQuran? `<div class="set-row"><div class="lbl">⏰ وقت تذكير القرآن</div><input type="time" value="${appSettings.quranReminderTime}" onchange="appSettings.quranReminderTime=this.value; saveSettings(); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div>` : ''}
+    <div class="set-row"><div class="lbl">${ICONS.quran} تذكير قراءة القرآن</div><div class="switch ${appSettings.notifQuran?'on':''}" onclick="toggleSetting('notifQuran'); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div></div>
+    ${appSettings.notifQuran? `<div class="set-time-row"><div class="set-time-top"><div class="lbl">${ICONS.clock} وقت تذكير القرآن</div><div class="set-time-input"><input type="time" value="${appSettings.quranReminderTime}" onchange="appSettings.quranReminderTime=this.value; saveSettings(); if(typeof scheduleDailyReminderNotifications==='function') scheduleDailyReminderNotifications();"></div></div></div>` : ''}
     ${appSettings.notifQuran? `<div class="set-row"><button type="button" class="btn-secondary" style="margin:0;padding:6px 12px;font-size:12px;" onclick="sakinaTestNotification('quran')">تجربة الآن</button></div>` : ''}
 
     <div class="set-section-title">الخصوصية</div>
@@ -15040,6 +15068,11 @@ async function ensureAzanChannels(){
   const LN = window.Capacitor.Plugins.LocalNotifications;
   if(!LN || !LN.createChannel) return;
   try{
+    if(LN.deleteChannel){
+      for(const oldId of LEGACY_AZAN_CHANNEL_IDS){
+        try{ await LN.deleteChannel({id: oldId}); }catch(e){ /* channel may not exist — fine */ }
+      }
+    }
     for(const m of MUEZZINS){
       await LN.createChannel({
         id: m.channelId,
