@@ -18057,8 +18057,8 @@ function qaEnsureAudioEl(){
   qaAudioEl.playbackRate = qaSettings.rate || 1;
   qaAudioEl.addEventListener('timeupdate', qaOnTimeUpdate);
   qaAudioEl.addEventListener('ended', qaOnEnded);
-  qaAudioEl.addEventListener('play', ()=>{ qaIsPlaying=true; renderMiniPlayer(); qaRefreshFullPlayerSheet(); });
-  qaAudioEl.addEventListener('pause', ()=>{ qaIsPlaying=false; renderMiniPlayer(); qaRefreshFullPlayerSheet(); });
+  qaAudioEl.addEventListener('play', ()=>{ qaIsPlaying=true; renderMiniPlayer(); qaRefreshFullPlayerSheet(); qaUpdateMediaSession(); });
+  qaAudioEl.addEventListener('pause', ()=>{ qaIsPlaying=false; renderMiniPlayer(); qaRefreshFullPlayerSheet(); qaUpdateMediaSession(); });
   qaAudioEl.addEventListener('error', qaOnAudioError);
   return qaAudioEl;
 }
@@ -18126,6 +18126,8 @@ function qaClosePlayer(){
   qaRuqyahIndex = -1;
   if(qaSleepTimeoutHandle){ clearTimeout(qaSleepTimeoutHandle); qaSleepTimeoutHandle=null; }
   qaSleepTimer = null;
+  const MPclose = qaMediaPlugin();
+  if(MPclose){ try{ MPclose.setPlaybackState({ playbackState:'none' }); }catch(e){} }
   if(typeof navigator!=='undefined' && 'mediaSession' in navigator){
     try{ navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }catch(e){}
   }
@@ -18177,17 +18179,38 @@ function qaFormatTime(sec){
   const m = Math.floor(sec/60), s = Math.floor(sec%60);
   return m+':'+String(s).padStart(2,'0');
 }
+function qaMediaPlugin(){
+  // v19.7: the Web MediaSession API used below (navigator.mediaSession)
+  // does NOT work inside Capacitor's embedded Android WebView at all —
+  // only real browsers/iOS support it there. A native plugin is required
+  // for lock-screen/notification playback controls on Android; see the
+  // "@capgo/capacitor-media-session" install note further down this file.
+  // Tries both known registration names since it varies by plugin version.
+  if(!window.Capacitor || !window.Capacitor.Plugins) return null;
+  return window.Capacitor.Plugins.MediaSession || window.Capacitor.Plugins.CapacitorMediaSession || null;
+}
 function qaUpdateMediaSession(){
+  const s = SURAHS.find(x=>x.id===qaCurrentSurahId);
+  const r = qaReciter(qaCurrentReciter);
+  const ruqyahItem = qaRuqyahMode ? qaRuqyahQueue[qaRuqyahIndex] : null;
+  const title = ruqyahItem ? 'الرقية الشرعية — '+ruqyahItem.title : (s ? 'سورة '+s.name : 'القرآن الكريم');
+  const artist = ruqyahItem ? ruqyahReciter().name : (r ? r.name : '');
+  const isPlaying = !!(qaAudioEl && !qaAudioEl.paused);
+  const MP = qaMediaPlugin();
+  if(MP){
+    try{
+      MP.setMetadata({ title, artist, album:'سكينة', artwork: [] });
+      MP.setPlaybackState({ playbackState: isPlaying ? 'playing' : 'paused' });
+      MP.setActionHandler({action:'play'}, ()=>{ if(qaAudioEl) qaAudioEl.play().catch(()=>{}); });
+      MP.setActionHandler({action:'pause'}, ()=>{ if(qaAudioEl) qaAudioEl.pause(); });
+      MP.setActionHandler({action:'previoustrack'}, qaPrev);
+      MP.setActionHandler({action:'nexttrack'}, ()=>qaNext(false));
+    }catch(e){ /* plugin not installed/synced yet — silent, playback itself still works */ }
+  }
   if(typeof navigator==='undefined' || !('mediaSession' in navigator)) return;
   try{
-    const s = SURAHS.find(x=>x.id===qaCurrentSurahId);
-    const r = qaReciter(qaCurrentReciter);
-    const ruqyahItem = qaRuqyahMode ? qaRuqyahQueue[qaRuqyahIndex] : null;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: ruqyahItem ? 'الرقية الشرعية — '+ruqyahItem.title : (s ? 'سورة '+s.name : 'القرآن الكريم'),
-      artist: ruqyahItem ? ruqyahReciter().name : (r ? r.name : ''),
-      album: 'سكينة',
-    });
+    navigator.mediaSession.metadata = new MediaMetadata({ title, artist, album:'سكينة' });
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     navigator.mediaSession.setActionHandler('play', ()=>{ if(qaAudioEl) qaAudioEl.play().catch(()=>{}); });
     navigator.mediaSession.setActionHandler('pause', ()=>{ if(qaAudioEl) qaAudioEl.pause(); });
     navigator.mediaSession.setActionHandler('previoustrack', qaPrev);
